@@ -562,6 +562,25 @@ async def handle_tools_list() -> Dict[str, Any]:
                     }
                 },
                 "required": ["category"]
+            },
+            "outputSchema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "category": {
+                        "type": "string",
+                        "description": "Fact category (e.g. 'general', 'space')"
+                    },
+                    "fact": {
+                        "type": "string",
+                        "description": "The random fact"
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "description": "ISO timestamp when the fact was generated"
+                    }
+                },
+                "required": ["category", "fact", "timestamp"]
             }
         },
         {
