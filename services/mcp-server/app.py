@@ -26,7 +26,6 @@ For MCP specification, see: https://modelcontextprotocol.io/specification/2025-1
 import asyncio
 import json
 import logging
-import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -47,14 +46,42 @@ app = FastAPI(
 )
 
 # API konstanter
-WEATHER_API_BASE = "https://api.openweathermap.org/data/2.5"
+YR_API_BASE = "https://api.met.no/weatherapi/locationforecast/2.0"
+YR_USER_AGENT = "IngridReisetjenester/1.0 (workshop-booster26)"
 NOMINATIM_API_BASE = "https://nominatim.openstreetmap.org"
 
-# Hent API nøkler fra miljøvariabler
-OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
-
-if not OPENWEATHER_API_KEY:
-    logger.warning("OPENWEATHER_API_KEY ikke satt i miljøvariabler")
+# Mapping fra yr.no symbol_code til norske beskrivelser
+SYMBOL_CODE_MAP = {
+    "clearsky": "klarvær",
+    "fair": "lettskyet",
+    "partlycloudy": "delvis skyet",
+    "cloudy": "skyet",
+    "lightrainshowers": "lette regnbyger",
+    "rainshowers": "regnbyger",
+    "heavyrainshowers": "kraftige regnbyger",
+    "lightrainshowersandthunder": "lette regnbyger og torden",
+    "rainshowersandthunder": "regnbyger og torden",
+    "heavyrainshowersandthunder": "kraftige regnbyger og torden",
+    "lightsleetshowers": "lette sluddbyger",
+    "sleetshowers": "sluddbyger",
+    "heavysleetshowers": "kraftige sluddbyger",
+    "lightsnowshowers": "lette snøbyger",
+    "snowshowers": "snøbyger",
+    "heavysnowshowers": "kraftige snøbyger",
+    "lightrain": "lett regn",
+    "rain": "regn",
+    "heavyrain": "kraftig regn",
+    "lightrainandthunder": "lett regn og torden",
+    "rainandthunder": "regn og torden",
+    "heavyrainandthunder": "kraftig regn og torden",
+    "lightsleet": "lett sludd",
+    "sleet": "sludd",
+    "heavysleet": "kraftig sludd",
+    "lightsnow": "lett snø",
+    "snow": "snø",
+    "heavysnow": "kraftig snø",
+    "fog": "tåke",
+}
 
 # HTTP klient
 http_client = httpx.AsyncClient()
@@ -100,6 +127,13 @@ async def shutdown_event():
     await http_client.aclose()
     logger.info("MCP API Server Lab03 avsluttet")
 
+def translate_symbol_code(symbol_code: str) -> str:
+    """Oversett yr.no symbol_code til norsk beskrivelse."""
+    # Fjern _day/_night/_polartwilight suffix
+    base = symbol_code.split("_")[0] if "_" in symbol_code else symbol_code
+    return SYMBOL_CODE_MAP.get(base, symbol_code)
+
+
 async def geocode_location(location: str) -> Optional[Dict[str, float]]:
     """Geocode en lokasjon til koordinater."""
     try:
@@ -109,104 +143,130 @@ async def geocode_location(location: str) -> Optional[Dict[str, float]]:
             "limit": 1,
             "addressdetails": 1
         }
-        
-        response = await http_client.get(f"{NOMINATIM_API_BASE}/search", params=params)
+
+        response = await http_client.get(
+            f"{NOMINATIM_API_BASE}/search",
+            params=params,
+            headers={"User-Agent": YR_USER_AGENT}
+        )
         response.raise_for_status()
-        
+
         data = response.json()
         if not data:
             return None
-            
+
         result = data[0]
         return {
             "lat": float(result["lat"]),
             "lon": float(result["lon"])
         }
-        
+
     except Exception as e:
         logger.error(f"Geocoding error: {e}")
         return None
 
 async def get_weather_forecast(location: str) -> Dict[str, Any]:
-    """Hent værprognose for en destinasjon."""
+    """Hent værprognose for en destinasjon via yr.no (api.met.no)."""
     try:
-        if not OPENWEATHER_API_KEY:
-            return {"error": "OpenWeather API-nøkkel mangler"}
-        
         # Geocode lokasjon
         coords = await geocode_location(location)
         if not coords:
             return {"error": f"Kunne ikke finne lokasjon: {location}"}
-        
-        # Hent nåværende vær
-        current_params = {
-            "lat": coords["lat"],
-            "lon": coords["lon"],
-            "appid": OPENWEATHER_API_KEY,
-            "units": "metric",
-            "lang": "no"
+
+        # Hent yr.no forecast
+        yr_url = f"{YR_API_BASE}/compact"
+        yr_params = {
+            "lat": round(coords["lat"], 4),
+            "lon": round(coords["lon"], 4),
         }
-        
-        current_response = await http_client.get(f"{WEATHER_API_BASE}/weather", params=current_params)
-        current_response.raise_for_status()
-        current_data = current_response.json()
-        
-        # Hent 5-dagers prognose
-        forecast_response = await http_client.get(f"{WEATHER_API_BASE}/forecast", params=current_params)
-        forecast_response.raise_for_status()
-        forecast_data = forecast_response.json()
-        
-        # Formater resultat
+        yr_headers = {"User-Agent": YR_USER_AGENT}
+
+        response = await http_client.get(yr_url, params=yr_params, headers=yr_headers)
+        response.raise_for_status()
+        yr_data = response.json()
+
+        timeseries = yr_data["properties"]["timeseries"]
+        if not timeseries:
+            return {"error": "Ingen værdata tilgjengelig fra yr.no"}
+
+        # Nåværende vær fra første entry
+        now_entry = timeseries[0]
+        now_details = now_entry["data"]["instant"]["details"]
+        now_symbol = ""
+        if "next_1_hours" in now_entry["data"]:
+            now_symbol = now_entry["data"]["next_1_hours"]["summary"]["symbol_code"]
+        elif "next_6_hours" in now_entry["data"]:
+            now_symbol = now_entry["data"]["next_6_hours"]["summary"]["symbol_code"]
+
         result = {
             "location": {
                 "name": location,
                 "coordinates": [coords["lat"], coords["lon"]]
             },
             "current": {
-                "temperature": round(current_data["main"]["temp"]),
-                "feels_like": round(current_data["main"]["feels_like"]),
-                "humidity": current_data["main"]["humidity"],
-                "description": current_data["weather"][0]["description"],
-                "wind_speed": current_data["wind"]["speed"],
-                "timestamp": datetime.now().isoformat()
+                "temperature": round(now_details["air_temperature"]),
+                "feels_like": round(now_details["air_temperature"]),  # yr.no har ikke feels_like
+                "humidity": round(now_details["relative_humidity"]),
+                "description": translate_symbol_code(now_symbol),
+                "wind_speed": now_details["wind_speed"],
+                "timestamp": now_entry["time"]
             },
             "forecast": []
         }
-        
-        # Prosesser 5-dagers prognose (gruppér etter dag)
-        daily_forecasts = {}
-        for item in forecast_data["list"]:
-            dt = datetime.fromtimestamp(item["dt"])
+
+        # Grupper timeseries etter dag for 5-dagers prognose
+        daily_forecasts: Dict[str, Dict[str, Any]] = {}
+        today = datetime.fromisoformat(timeseries[0]["time"].replace("Z", "+00:00")).strftime("%Y-%m-%d")
+
+        for entry in timeseries:
+            dt = datetime.fromisoformat(entry["time"].replace("Z", "+00:00"))
             date_key = dt.strftime("%Y-%m-%d")
-            
+
+            # Hopp over dagens dato (allerede i current)
+            if date_key == today:
+                continue
+
+            details = entry["data"]["instant"]["details"]
+            temp = details["air_temperature"]
+
+            # Hent symbol_code fra next_1_hours eller next_6_hours
+            symbol = ""
+            if "next_1_hours" in entry["data"]:
+                symbol = entry["data"]["next_1_hours"]["summary"]["symbol_code"]
+            elif "next_6_hours" in entry["data"]:
+                symbol = entry["data"]["next_6_hours"]["summary"]["symbol_code"]
+
             if date_key not in daily_forecasts:
                 daily_forecasts[date_key] = {
                     "date": date_key,
-                    "temp_min": item["main"]["temp"],
-                    "temp_max": item["main"]["temp"],
+                    "temp_min": temp,
+                    "temp_max": temp,
                     "descriptions": [],
-                    "humidity": item["main"]["humidity"],
-                    "wind_speed": item["wind"]["speed"]
+                    "humidity": details["relative_humidity"],
+                    "wind_speed": details["wind_speed"]
                 }
-            
-            daily_forecasts[date_key]["temp_min"] = min(daily_forecasts[date_key]["temp_min"], item["main"]["temp"])
-            daily_forecasts[date_key]["temp_max"] = max(daily_forecasts[date_key]["temp_max"], item["main"]["temp"])
-            daily_forecasts[date_key]["descriptions"].append(item["weather"][0]["description"])
-        
-        # Formater dagsprognose
+
+            daily_forecasts[date_key]["temp_min"] = min(daily_forecasts[date_key]["temp_min"], temp)
+            daily_forecasts[date_key]["temp_max"] = max(daily_forecasts[date_key]["temp_max"], temp)
+            if symbol:
+                daily_forecasts[date_key]["descriptions"].append(translate_symbol_code(symbol))
+
+        # Formater dagsprognose (maks 5 dager)
         for date_key in sorted(daily_forecasts.keys())[:5]:
             day = daily_forecasts[date_key]
+            descriptions = day["descriptions"]
+            description = max(set(descriptions), key=descriptions.count) if descriptions else "ukjent"
             result["forecast"].append({
                 "date": day["date"],
                 "temp_min": round(day["temp_min"]),
                 "temp_max": round(day["temp_max"]),
-                "description": max(set(day["descriptions"]), key=day["descriptions"].count),
-                "humidity": day["humidity"],
+                "description": description,
+                "humidity": round(day["humidity"]),
                 "wind_speed": day["wind_speed"]
             })
-        
+
         return result
-        
+
     except Exception as e:
         logger.error(f"Weather forecast error: {e}")
         return {"error": f"Kunne ikke hente væropplysninger: {str(e)}"}

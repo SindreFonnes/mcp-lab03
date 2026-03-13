@@ -174,7 +174,7 @@ setup: ## Initial setup (copy .env.example to .env)
 		echo "Created .env from .env.example"; \
 		echo "Please edit .env and add your API keys:"; \
 		echo "  - OPENAI_API_KEY"; \
-		echo "  - OPENWEATHER_API_KEY"; \
+		echo "  (Værdata bruker yr.no - ingen API-nøkkel nødvendig)"; \
 	else \
 		echo ".env already exists"; \
 	fi

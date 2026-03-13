@@ -203,7 +203,8 @@ docker compose --profile compliance-test run mcp-sdk-client
 ```bash
 # Kreves for LAB03
 OPENAI_API_KEY=your_openai_api_key_here
-OPENWEATHER_API_KEY=your_openweather_api_key_here  
+
+# Værdata bruker yr.no (api.met.no) - ingen API-nøkkel nødvendig
 
 # Service URLs (auto-konfigurert i Docker)
 MCP_SERVER_URL=http://mcp-server:8000
@@ -294,7 +295,7 @@ cd travel-weather-mcp
 cp .env.example .env
 # Rediger .env med dine API nøkler:
 # - OPENAI_API_KEY (kreves)
-# - OPENWEATHER_API_KEY (kreves)
+# Værdata bruker yr.no - ingen API-nøkkel nødvendig
 
 # Bygg og start alle tjenester
 docker compose up -d

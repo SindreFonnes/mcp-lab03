@@ -5,7 +5,7 @@ paginate: true
 backgroundColor: #1e1e1e
 color: #ffffff
 header: 'AI Agent Workshop - Model Context Protocol'
-footer: 'Leif Terje Fonnes & Lars Søraas | Januar 2026'
+footer: 'Leif Terje Fonnes & Lars Søraas | Mars 2026'
 style: |
   section {
     font-size: 24px;
@@ -57,7 +57,7 @@ _color: black _color: black
 ## AI Agenter med Model Context Protocol (MCP)
 
 **Leif Terje Fonnes og Lars Søraas**  
-*Januar 2026*
+*13 Mars - Booster 2026*
 
 ![bg](https://www.publicdomainpictures.net/pictures/180000/velka/paper-and-a-pencil-14671851619PA.jpg)
 
@@ -215,16 +215,15 @@ _color: black _color: black
 
 ---
 
-# API nøkkel OpenAI GPT-4.1-mini og OpenWeather
-## Disse trenger du for å få tilgang til en LLM og værdata
+# API nøkkel OpenAI GPT-4.1-mini
+## Denne trenger du for å få tilgang til en LLM (værdata bruker yr.no - ingen nøkkel nødvendig)
 <p></p>
 
 ## 1. Gå til https://github.com/marketplace/models
 ## 2. Velg **OpenAI GPT-4o-mini / Use this model / Create Personal Access Token**
 ## 3. Kopier tokenet - husk - du kan _ikke_ få se det på nytt
 ## 4. Åpne **.env** filen i Codespaces og legg tokenet inn i placeholderen for ```OPENAI_API_KEY```
-## 5. Register deg gratis på https://openweathermap.org/api og hent ut API Key
-## 6. Legg denne og inn i **.env** filen
+## 5. Værdata hentes fra yr.no (api.met.no) - ingen API-nøkkel nødvendig
 ---
 
 <!-- _class: lead -->
@@ -780,7 +779,7 @@ cp .env.example .env
 ```bash
 # .env
 OPENAI_API_KEY=your-openai-api-key-here
-OPENWEATHER_API_KEY=your-openweather-api-key-here
+# Værdata bruker yr.no (api.met.no) - ingen API-nøkkel nødvendig
 NEWS_API_KEY=your-news-api-key-here  # Hvis du bruker news verktøy
 ```
 
@@ -979,7 +978,7 @@ Forbedre værverktøyet til å inkludere:
 - Luftkvalitet data
 - Soloppgang/solnedgang tider
 
-**Tips:** OpenWeatherMap API gir all denne dataen i responsen!
+**Tips:** yr.no (api.met.no) gir all denne dataen i responsen - uten API-nøkkel!
 
 ---
 
