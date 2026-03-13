@@ -26,8 +26,10 @@ For MCP specification, see: https://modelcontextprotocol.io/specification/2025-1
 import asyncio
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+
 
 import httpx
 import uvicorn
@@ -150,6 +152,32 @@ async def get_random_fact(category: str = "general") -> Dict[str, Any]:
         "category": category,
         "fact": random.choice(facts.get(category, facts["general"])),
         "timestamp": datetime.now().isoformat()
+    }
+
+async def get_news(topic: str, language: str = "en") -> Dict[str, Any]:
+    """Fetch real news from NewsAPI."""
+    api_key = os.getenv("NEWS_API_KEY")
+    if not api_key:
+        return {"isError": True, "content": [{"type": "text", "text": "NEWS_API_KEY not set"}]}
+
+    async with httpx.AsyncClient() as client:
+        async def fetch_articles(request_language: str) -> List[Dict[str, Any]]:
+            response = await client.get(
+                "https://newsapi.org/v2/everything",
+                params={"q": topic, "language": request_language, "apiKey": api_key},
+                timeout=10.0
+            )
+            return response.json().get("articles", [])[:3]
+
+        articles = await fetch_articles(language)
+        if not articles and language != "en":
+            articles = await fetch_articles("en")
+
+    formatted = "\n".join([f"• {a['title']}\n  {a['url']}" for a in articles])
+
+    return {
+        "isError": False,
+        "content": [{"type": "text", "text": f"Latest on '{topic}':\n\n{formatted}"}]
     }
 
 
@@ -584,6 +612,28 @@ async def handle_tools_list() -> Dict[str, Any]:
             }
         },
         {
+            "name": "get_news",
+            "title": "News Search",
+            "description": "Fetch the latest news articles for a topic",
+            "inputSchema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Topic or keyword to search for in the news"
+                    },
+                    "language": {
+                        "type": "string",
+                        "description": "Two-letter language code for NewsAPI results",
+                        "default": "en"
+                    }
+                },
+                "required": ["topic"],
+                "additionalProperties": False
+            }
+        },
+        {
             "name": "get_weather_forecast",
             "title": "Weather Forecast Provider",
             "description": "Hent værprognose for en destinasjon med nåværende forhold og 5-dagers varsling",
@@ -691,6 +741,15 @@ async def handle_tools_call(tool_name: str, arguments: Dict[str, Any]) -> Dict[s
             "content": [{"type": "text", "text": json.dumps(result)}],
             "isError": False
         }
+    elif tool_name == "get_news":
+        topic = arguments.get("topic")
+        if not topic:
+            return {
+                "content": [{"type": "text", "text": "Mangler påkrevd parameter: 'topic'"}],
+                "isError": True
+            }
+
+        return await get_news(topic, arguments.get("language", "en"))
     else:
         # Ukjent tool
         return {
