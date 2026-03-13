@@ -133,6 +133,25 @@ def translate_symbol_code(symbol_code: str) -> str:
     base = symbol_code.split("_")[0] if "_" in symbol_code else symbol_code
     return SYMBOL_CODE_MAP.get(base, symbol_code)
 
+async def get_random_fact(category: str = "general") -> Dict[str, Any]:
+    """Because every AI needs useless trivia."""
+    facts = {
+        "general": [
+            "Honey never spoils. 3000-year-old honey found in Egyptian tombs — still edible.",
+            "Octopuses have three hearts."
+        ],
+        "space": [
+            "A day on Venus is longer than its year.",
+            "Neutron stars are so dense a teaspoon weighs 6 billion tons."
+        ]
+    }
+    import random
+    return {
+        "category": category,
+        "fact": random.choice(facts.get(category, facts["general"])),
+        "timestamp": datetime.now().isoformat()
+    }
+
 
 async def geocode_location(location: str) -> Optional[Dict[str, float]]:
     """Geocode en lokasjon til koordinater."""
@@ -531,6 +550,21 @@ async def handle_tools_list() -> Dict[str, Any]:
     """
     tools = [
         {
+            "name": "get_random_fact",
+            "description": "Get a random interesting fact",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "category": {
+                        "type": "string",
+                        "enum": ["general", "space"],
+                        "description": "Category of fact"
+                    }
+                },
+                "required": ["category"]
+            }
+        },
+        {
             "name": "get_weather_forecast",
             "title": "Weather Forecast Provider",
             "description": "Hent værprognose for en destinasjon med nåværende forhold og 5-dagers varsling",
@@ -632,7 +666,12 @@ async def handle_tools_call(tool_name: str, arguments: Dict[str, Any]) -> Dict[s
             "structuredContent": result,
             "isError": False
         }
-
+    elif tool_name == "get_random_fact":
+        result = await get_random_fact(arguments.get("category", "general"))
+        return {
+            "content": [{"type": "text", "text": json.dumps(result)}],
+            "isError": False
+        }
     else:
         # Ukjent tool
         return {
